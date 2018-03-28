@@ -273,6 +273,21 @@ func Getfscreatecon() (string, error) {
 	return fcon, err
 }
 
+//Setcon sets the context on the currently running process
+//This requires the self:process { dyntransition setcurrent transition } permissions
+//in the selinux context policy
+func Setcon(scon string) (rerr error) {
+	rc, err := C.setcon(C.CString(scon))
+	if rc < 0 {
+		if err != nil {
+			rerr = err
+		} else {
+			rerr = fmt.Errorf("Unknown setcon error: %d", rc)
+		}
+	}
+	return
+}
+
 //Getcon gets the selinux context
 func Getcon() string {
 	var pcon *C.char
