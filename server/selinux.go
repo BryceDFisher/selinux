@@ -79,7 +79,7 @@ func main() {
 
 	permsHandler := http.NewServeMux()
 	permsHandler.HandleFunc("/", PrintLabel)
-	permsHandler.HandleFunc("/create", CreateFile)
+	permsHandler.HandleFunc("/create/", CreateFile)
 	f := FS{
 		Dir: http.Dir(tmpDir),
 	}
@@ -125,78 +125,50 @@ func CreateFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cap, err := selinux.Fgetxattr(f.Fd(), selinux.SecuritySelinux)
-	if err != nil {
-		logging.Errorf("Unable to get attribute on new file: %s", err.Error())
-	}
-	logging.Mandatory("Original perms: %s", cap)
-
 	fcon, err := selinux.Fgetxattr(f.Fd(), selinux.SecuritySelinux)
 	if err != nil {
 		logging.Errorf("Unable to get inital file attributes: %s", err.Error())
-	} else {
-		logging.Mandatory("Initial file permissions: %s", fcon)
 	}
 
-	scon := selinux.Getcon()
-	con := selinux.NewContext(scon)
-	level := strings.Split(strings.Split(con.GetLevel(), ":")[0], "-")
-	newLevel := level[len(level)-1]
-	/*
-		nii, _ := strconv.Atoi(string(newLevel[1]))
-		nii++
-		nI := strconv.Itoa(nii)
-		newLevel = string(newLevel[0]) + nI
-	*/
-	con = selinux.NewContext(string(fcon))
-	con.SetLevel(newLevel)
-	i, err := selinux.Fsetfilecon(int(f.Fd()), con.Get())
-	if i < 0 {
-		if err != nil {
-			logging.Errorf("Unable to set perms on file: %s", err.Error())
-		} else {
-			logging.Errorf("Unable to set perms on file: unknown error %d", i)
-		}
-		f.Close()
-		os.Remove(f.Name())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("Unable to create file")))
-		return
+	if strings.Contains(strings.ToLower(r.RequestURI), "lower") {
+		logging.Mandatory("Lowering file perms")
+		con := selinux.NewContext(string(fcon))
+		con.SetLevel("s0")
+		fcon = []byte(con.Get())
+		err = selinux.Fsetfilecon(int(f.Fd()), string(fcon))
 	}
 
-	cap, err = selinux.Fgetxattr(f.Fd(), selinux.SecuritySelinux)
-	if err != nil {
-		logging.Errorf("Unable to get attribute on new file: %s", err.Error())
-	}
-	logging.Mandatory("Final perms: %s", cap)
+	logging.Mandatory("New file permissions: %s", fcon)
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Created %q with perms %q", f.Name(), cap)))
+	w.Write([]byte(fmt.Sprintf("Created %q with perms %q", f.Name(), fcon)))
 	f.Close()
-}
-
-//GetFiles resturns either the specific file or a list of available files
-func GetFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func setPerms(r *http.Request) {
 	runtime.LockOSThread()
 	logging.Mandatory("Request for %q on %q", r.RequestURI, r.Host)
 	con := selinux.Getcon()
+	c := selinux.NewContext(con)
 	if strings.Contains(r.Host, "8008") {
 		logging.Mandatory("Dropping perms")
-		c := selinux.NewContext(con)
 		c.SetLevel("s0-s3")
 		err := selinux.Setcon(c.Get())
 		if err != nil {
 			logging.Errorf("Unable to set con: %s", err.Error())
 		}
 	} else {
-		c := selinux.NewContext(con)
 		c.SetLevel("s0-s5")
 		err := selinux.Setcon(c.Get())
 		if err != nil {
 			logging.Errorf("Unable to set con: %s", err.Error())
 		}
 	}
+	l := strings.Split(c.GetLevel(), "-")
+	c.SetLevel(l[len(l)-1])
+	err := selinux.Setfscreatecon(c.Get())
+	if err != nil {
+		logging.Errorf("Unable to set future file permissions: %s", err.Error())
+	}
+
 }

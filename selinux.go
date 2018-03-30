@@ -200,11 +200,18 @@ Fsetfilecon(fd, scon)
 */
 
 //Fsetfilecon rc == 0 -> success
-func Fsetfilecon(fd int, scon string) (int, error) {
+func Fsetfilecon(fd int, scon string) (err error) {
 	var con *C.char
 	con = C.CString(scon)
-	rc, err := C.fsetfilecon(C.int(fd), con)
-	return int(rc), err
+	rc, lerr := C.fsetfilecon(C.int(fd), con)
+	if rc < 0 {
+		if lerr != nil {
+			err = lerr
+		} else {
+			err = fmt.Errorf("Unknown error setting file perms")
+		}
+	}
+	return
 }
 
 //Lgetfilecon return selabel , sizeof(selabel)
@@ -221,43 +228,49 @@ func Lgetfilecon(path string) (string, int) {
 	return scon, int(rc)
 }
 
-//SelabelLookup this func not work
-func SelabelLookup(name string, mode int) (string, error) {
-	var con *C.char
-	//var sehandel C.selhandle
+//SelabelLookup: name is the path to the file
+func SelabelLookup(name string) (string, error) {
 	var sehandle *C.struct_selabel_handle
-	/*
-		var st C.struct_stat
-		rc, _ := C.stat(C.CString(name), &st)
-		if rc == 0 {
-		mode = int(st.st_mode)
-		}
-	*/
-
-	//var sehandel *C.selabel_handle
-	//sehandel := NewSelabel_handle()
+	sehandle = C.selabel_open(C.SELABEL_CTX_FILE, nil, 0)
+	if sehandle == nil {
+		return "", fmt.Errorf("Unable to open selabel")
+	}
 	var scon string
+	var con *C.char
+	//mode needs to be set to the perms of the file as returned by lstat
+	mode := 0
 	rc, err := C.selabel_lookup(sehandle, &con, C.CString(name), C.int(mode))
 	if rc == 0 {
 		scon = C.GoString(con)
-		//C.free(con)
-		//C.free(sehandel)
+		C.free(unsafe.Pointer(con))
+		C.free(unsafe.Pointer(sehandle))
+	} else {
+		if err == nil {
+			err = fmt.Errorf("Lookup returned code %d", rc)
+		}
 	}
 	return scon, err
 }
 
 //Setfscreatecon sets the default creation label
-func Setfscreatecon(scon string) (int, error) {
+func Setfscreatecon(scon string) (err error) {
 	var (
-		rc  C.int
-		err error
+		rc   C.int
+		lerr error
 	)
 	if scon != "" {
-		rc, err = C.setfscreatecon(C.CString(scon))
+		rc, lerr = C.setfscreatecon(C.CString(scon))
 	} else {
-		rc, err = C.setfscreatecon(nil)
+		rc, lerr = C.setfscreatecon(nil)
 	}
-	return int(rc), err
+	if rc < 0 {
+		if lerr != nil {
+			err = lerr
+		} else {
+			err = fmt.Errorf("Unknown error setting future file permissions")
+		}
+	}
+	return err
 }
 
 //Getfscreatecon gets the default create label
