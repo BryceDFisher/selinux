@@ -33,15 +33,10 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"unsafe"
-
-	//"bufio"
 	"regexp"
-	//"io"
-	//"os"
-	//"strconv"
 	"strings"
 	"syscall"
+	"unsafe"
 )
 
 var (
