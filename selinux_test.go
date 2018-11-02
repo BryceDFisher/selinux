@@ -3,16 +3,15 @@
 package selinux
 
 import (
-	"fmt"
 	"os"
 	"testing"
 )
 
 func TestSelinux_enabled(t *testing.T) {
 	if Enabled() {
-		fmt.Println("SELinux status = Enabled")
+		t.Log("SELinux status = Enabled")
 	} else {
-		fmt.Println("SELinux status = Disabled")
+		t.Log("SELinux status = Disabled")
 	}
 }
 
@@ -21,7 +20,9 @@ func TestGetfilecon(t *testing.T) {
 	var size int
 	flabel, size = Lgetfilecon("selinux.go")
 	if size > 0 {
-		fmt.Println("selinux.go label = ", flabel)
+		t.Logf("selinux.go label = %s", flabel)
+	} else {
+		t.Errorf("Unable to get label")
 	}
 }
 
@@ -30,9 +31,9 @@ func TestSetfilecon(t *testing.T) {
 	scon := "system_u:object_r:usr_t:s0"
 	rc, _ := Lsetfilecon(path, scon)
 	if rc != 0 {
-		fmt.Println("Setfilecon failed")
+		t.Error("Setfilecon failed")
 	} else {
-		fmt.Println("Setfilecon success")
+		t.Log("Setfilecon success")
 	}
 }
 
@@ -41,17 +42,17 @@ func TestSetfilecon(t *testing.T) {
 func TestFsetfilecon(t *testing.T) {
 	f, err := os.Create("test.selinux")
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 	defer f.Close()
 	fd := int(f.Fd())
 
 	scon := "system_u:object_r:usr_t:s0"
-	rc, _ := Fsetfilecon(fd, scon)
-	if rc != 0 {
-		fmt.Println("fsetfilecon failed")
+	rc := Fsetfilecon(fd, scon)
+	if rc != nil {
+		t.Errorf("fsetfilecon failed: %s", err.Error())
 	} else {
-		fmt.Println("fsetfilecon: test.selinux -> ", scon)
+		t.Logf("fsetfilecon: test.selinux -> %s", scon)
 	}
 }
 
@@ -59,9 +60,9 @@ func TestMatchpathcon(t *testing.T) {
 	path := "selinux_test.go"
 	mode, ecode := GetModeT(path)
 	if ecode == 0 {
-		con, err := Matchpathcon(path, mode)
+		_, err := Matchpathcon(path, mode)
 		if err != nil {
-			fmt.Println("selinux_test.go selabel = ", con)
+			t.Errorf("selinux_test.go selabel = %s", err.Error())
 		}
 	}
 }
@@ -69,20 +70,24 @@ func TestMatchpathcon(t *testing.T) {
 func TestSelinux_getenforcemode(t *testing.T) {
 	var enforce int
 	enforce = Getenforcemode()
-	fmt.Printf("%s", "Selinux mode = ")
+	t.Logf("%s", "Selinux mode = ")
 	if enforce == Enforcing {
-		fmt.Println("Enforcing mode")
+		t.Logf("Enforcing mode")
 	} else if enforce == Permissive {
-		fmt.Println("permissive mode")
+		t.Logf("permissive mode")
 	} else if enforce == Disabled {
-		fmt.Println("Disabled mode")
+		t.Logf("Disabled mode")
+	} else {
+		t.Errorf("Unknown mode %d", enforce)
 	}
 }
 func TestGetPidcon(t *testing.T) {
 	pid := os.Getpid()
-	fmt.Printf("PID:%d MCS:%s\n", pid, IntToMcs(pid, 1023))
+	t.Logf("PID:%d MCS:%s\n", pid, IntToMcs(pid, 1023))
 	if scon, err := Getpidcon(pid); err == nil {
-		fmt.Printf("pid = %d, security_context = %s ", pid, scon)
+		t.Logf("pid = %d, security_context = %s ", pid, scon)
+	} else {
+		t.Errorf("Unable to GetPidcon: %s", err.Error())
 	}
 }
 
@@ -90,13 +95,13 @@ func TestLgetxattr(t *testing.T) {
 	fc, err := os.OpenFile("se_xtars_test.txt", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
 	defer fc.Close()
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 	fcXattr, err := Lgetxattr(fc.Name(), SecuritySelinux)
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	} else {
-		fmt.Println("se_xattrs_test.txt xattr = ", string(fcXattr))
+		t.Logf("se_xattrs_test.txt xattr = %s", string(fcXattr))
 	}
 
 }
@@ -105,14 +110,14 @@ func TestLsetxattr(t *testing.T) {
 	fc, err := os.OpenFile("se_xtars_test.txt", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
 	defer fc.Close()
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 	scon := "system_u:object_r:usr_t:s0"
 	err = Lsetxattr(fc.Name(), SecuritySelinux, []byte(scon), 0)
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	} else {
-		fmt.Println("set ", fc.Name(), "selinux_label -> ", scon, "success")
+		t.Log("set ", fc.Name(), "selinux_label -> ", scon, "success")
 	}
 
 }
@@ -121,13 +126,13 @@ func TestFgetxattr(t *testing.T) {
 	fc, err := os.OpenFile("se_xtars_test_fd.txt", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
 	defer fc.Close()
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 	fcXattr, err := Fgetxattr(fc.Fd(), SecuritySelinux)
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	} else {
-		fmt.Println("TestFgetxattr:se_xattrs_test.txt xattr = ", string(fcXattr))
+		t.Log("TestFgetxattr:se_xattrs_test.txt xattr = ", string(fcXattr))
 	}
 
 }
@@ -136,16 +141,16 @@ func TestFsetxattr(t *testing.T) {
 	fc, err := os.OpenFile("se_xtars_test_fd.txt", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
 	defer fc.Close()
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 
 	scon := "system_u:object_r:usr_t:s0"
 
 	err = Fsetxattr(fc.Fd(), SecuritySelinux, []byte(scon), 0)
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	} else {
-		fmt.Println("TestFsetxattr:se_xattrs_test_fd.txt xattr = ", scon)
+		t.Log("TestFsetxattr:se_xattrs_test_fd.txt xattr = ", scon)
 	}
 
 }
