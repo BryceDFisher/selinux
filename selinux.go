@@ -16,7 +16,7 @@ package selinux
 */
 // use deepin linux 2013.1
 // kernel requre 3.8
-// libselinux == 2.3
+// libselinux == 2.5
 
 // //cgo  linux CFLAGS: -Iinclude -I.
 // #cgo pkg-config: libselinux
@@ -34,6 +34,7 @@ import (
 	"path"
 	"path/filepath"
 	"unsafe"
+
 	//"bufio"
 	"regexp"
 	//"io"
@@ -228,7 +229,7 @@ func Lgetfilecon(path string) (string, int) {
 	return scon, int(rc)
 }
 
-//SelabelLookup: name is the path to the file
+//SelabelLookup name is the path to the file
 func SelabelLookup(name string) (string, error) {
 	var sehandle *C.struct_selabel_handle
 	sehandle = C.selabel_open(C.SELABEL_CTX_FILE, nil, 0)
